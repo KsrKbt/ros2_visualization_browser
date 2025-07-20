@@ -207,7 +207,7 @@ async def broadcast_map():
     clients_to_send = [client for client in connected_clients if client.client_state == WebSocketState.CONNECTED]
     if not clients_to_send:
         return
-    # 各位クライアントへの送信を一つのコルーチンとして定義
+    # 各クライアントへの送信を一つのコルーチンとして定義
     async def send_to_client(client, metadata, image):
         try:
             await client.send_json(metadata)
