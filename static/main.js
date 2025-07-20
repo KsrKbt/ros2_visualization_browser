@@ -1,33 +1,29 @@
-// static/main.js
-
 const canvas = document.getElementById('mapCanvas');
 const ctx = canvas.getContext('2d');
 const statusElement = document.getElementById('status');
 
-// マップの表示倍率
-const SCALE_FACTOR = 10; // 10倍で表示（この数値は自由に変更してください）
+const map_scale = 7; // 地図の表示倍率
 
-// アプリケーションの状態を管理
+// データ管理のためのオブジェクト定義
 const state = {
     map: { image: null, info: null },
     robot: { pose: null }
 };
 
-// Web Workerを起動
+// サーバとの通信を担うworker.jsをバックグラウンドで起動
 const worker = new Worker('/static/worker.js');
 
-// Workerからのメッセージを待機
+// workerからのメッセージ待機
 worker.onmessage = (event) => {
-    const { type, ...data } = event.data;
+    const { type, ...data } = event.data; //受信したデータからtypeプロパティを分離
     switch (type) {
-        case 'status':
+        case 'status': // サーバとの接続状態表示
             statusElement.textContent = data.message;
             break;
-        case 'mapInfo':
+        case 'mapInfo': // 受信した地図を設定した表示倍率と掛け合わせる
             state.map.info = data.info;
-            // Canvasの描画領域サイズを、元のマップサイズ x 倍率に設定
-            canvas.width = data.info.width * SCALE_FACTOR;
-            canvas.height = data.info.height * SCALE_FACTOR;
+            canvas.width = data.info.width * map_scale;
+            canvas.height = data.info.height * map_scale;
             break;
         case 'mapImage':
             state.map.image = data.image;
@@ -43,36 +39,37 @@ function draw() {
     requestAnimationFrame(draw);
 
     const { width, height } = canvas;
-    // getContextはループ内で一度だけ取得するのが効率的
-    const localCtx = canvas.getContext('2d');
-    localCtx.clearRect(0, 0, width, height);
-
+    const localCtx = canvas.getContext('2d'); // getContextはループ内で一度だけ取得するのが効率的
+    localCtx.clearRect(0, 0, width, height); // 前回の描画を削除
+    
+    // 地図が届いていない場合
     if (!state.map.image) {
         localCtx.fillStyle = '#eee';
         localCtx.fillRect(0, 0, width, height);
         return;
     }
 
-    // ★★★ 重要な設定 ★★★
-    // JavaScript側でもスムージング無効化を念のため設定
+    // 画像のぼかしを無効化
     localCtx.imageSmoothingEnabled = false;
 
-    // マップ画像をCanvas全体に拡大して描画
+    // 地図画像をCanvas全体に拡大して描画
     localCtx.drawImage(state.map.image, 0, 0, width, height);
 
-    // ロボットを描画
+    // ロボットの描画
     if (state.robot.pose && state.map.info) {
         const { info } = state.map;
         const { pose } = state.robot;
 
-        // ROS座標からピクセル座標への変換 (倍率を考慮)
-        const px = ((pose.x - info.origin.position.x) / info.resolution) * SCALE_FACTOR;
-        const py = ((pose.y - info.origin.position.y) / info.resolution) * SCALE_FACTOR;
+        // Ros座標からピクセル座標への変換 (表示倍率を考慮)
+        const px = ((pose.x - info.origin.position.x) / info.resolution) * map_scale;
+        const py = ((pose.y - info.origin.position.y) / info.resolution) * map_scale;
 
-        localCtx.save();
+        localCtx.save(); // 座標系の初期状態（左上が原点）を保存
+        // ロボットの位置情報をもとに座標系を移動
         localCtx.translate(px, py);
         localCtx.rotate(pose.theta);
 
+        // ロボットを表す矢印の描画
         const arrowLength = 12;
         const arrowWidth = 8;
         localCtx.fillStyle = 'rgba(255, 0, 0, 0.9)';
@@ -83,9 +80,8 @@ function draw() {
         localCtx.closePath();
         localCtx.fill();
         
-        localCtx.restore();
+        localCtx.restore(); // 座標系の初期状態にリセット
     }
 }
 
-// 描画ループを開始
 draw();

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ROS Map Visualization</title>
+    <title>Robot Map Visualization</title>
     <style>
         body { 
             font-family: sans-serif; 
@@ -13,22 +13,16 @@
             background-color: #f0f0f0;
         }
         
-        /* ★★★ ここからが修正箇所 ★★★ */
         canvas { 
             border: 1px solid black; 
             background-color: #fff;
-            /* ブラウザによる画像のぼかし処理を無効化する */
-            image-rendering: -moz-crisp-edges;         /* Firefox */
-            image-rendering: -webkit-crisp-edges;    /* Webkit (Chrome, Safari) */
-            image-rendering: pixelated;              /* W3C標準 */
-            image-rendering: crisp-edges;            /* W3C標準の旧版 */
-            transform: scaleX(-1);
+            image-rendering: pixelated; /* ピクセル表示 */
+            transform: scaleX(-1);  /* 水平方向に反転 */
         }
-        /* ★★★ ここまでが修正箇所 ★★★ */
     </style>
 </head>
 <body>
-    <h1>ROS Map Visualization</h1>
+    <h1>Robot Map Visualization</h1>
     <p>Status: <span id="status">Connecting...</span></p>
     <canvas id="mapCanvas"></canvas>
     

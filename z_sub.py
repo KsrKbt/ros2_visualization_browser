@@ -4,13 +4,10 @@ import json
 
 # メッセージを受信するたびに呼び出される関数 (コールバック関数)
 def listener(sample: zenoh.Sample):
-    """
-    受信したデータのキー(トピック名)とペイロード(値)を画面に表示する
-    """
+    # 受信したデータのキー(トピック名)とペイロード(値)を画面に表示する
     topic = sample.key_expr
     
     try:
-        # --- 変更箇所 ---
         # ZBytes を標準の bytes に変換してからデコードする
         payload_str = bytes(sample.payload).decode("utf-8")
         
@@ -31,8 +28,8 @@ if __name__ == "__main__":
 
     print("Subscribing to all topics ('**')...")
     
-    # "**" トピックを購読し、メッセージが来たら listener 関数を呼び出す
-    sub = session.declare_subscriber("map", listener)
+    # トピックを購読し、メッセージが来たら listener 関数を呼び出す
+    sub = session.declare_subscriber("cmd_vel", listener)
 
     print("Listening for messages... Press Ctrl+C to quit.")
 
