@@ -1,3 +1,7 @@
+# zenohを介したロボットデータ購読
+# 購読データを用いて地図画像生成処理とロボット位置の計算処理を行う
+# FastAPIを用いて、処理結果をWebSocket経由で接続中の全クライアントに配信。また、Webページの提供
+
 import asyncio
 import threading
 import json
@@ -20,14 +24,11 @@ from tf2_msgs.msg import TFMessage # 座標変換データの型定義
 
 logging.basicConfig(level=logging.INFO)
 LOG = logging.getLogger(__name__)
-ZENOH_ROUTER_ADDRESS = "tcp/localhost:7447" # 接続先zenohルーターのアドレス指定
 
-# ROSトピック定義（名前空間としてrobot1を指定）
-# ロボットが増えた際にzenohネットワーク内でデータを判別可能にする
-# ただし今回の実行環境ではロボットはネットワーク内に1台のみ存在
-MAP_TOPIC = "robot1/map"
-TF_TOPIC = "robot1/tf"
-TF_STATIC_TOPIC = "robot1/tf_static"
+# ROS2トピック定義
+MAP_TOPIC = "map" # 地図データ
+TF_TOPIC = "tf" # 自己位置データ
+TF_STATIC_TOPIC = "tf_static" # 自己位置データ
 
 # トピック名とメッセージ型定義の紐付け
 ROS_MSG_TYPES = {
@@ -36,17 +37,17 @@ ROS_MSG_TYPES = {
     TF_STATIC_TOPIC: TFMessage
 }
 
-# 接続中のwebsocketクライアントリスト
+# 接続中のWebSocketクライアントリスト
 connected_clients: list[WebSocket] = []
 app_data = None
 
 class AppData:
-    def __init__(self):
+    def __init__(self): # 各データ保持用の変数定義
         self.lock = threading.Lock()
-        self.latest_map_img = None # 地図画像の保持用
-        self.map_info = None # 地図のメタデータ保持用
-        self.transforms = {} # 座標変換データの保持用
-        self.robot_pose_on_map = None # ロボットの最終的な姿勢の保持用
+        self.latest_map_img = None # 地図画像
+        self.map_info = None # 地図のメタデータ
+        self.transforms = {} # 座標変換データ（辞書変数）
+        self.robot_pose_on_map = None # ロボットの最終的な姿勢
 
 def make_transformation_matrix(translation, rotation):
     # 位置と回転行列から4x4の同次変換行列を作成
@@ -55,9 +56,10 @@ def make_transformation_matrix(translation, rotation):
     T[:3, 3] = translation
     return T
 
+# 地図（map座標系）におけるロボットの姿勢（位置と向き）の算出処理
 def update_robot_pose():
-    # tfツリーからロボットのmap座標系での姿勢を計算
-    # tfツリー：base_footprint→odom→odom→map
+    # tfツリー（ロボットの姿勢の座標関係を木構造で表したもの）からロボットのmap座標系での姿勢を計算
+    # tfツリーの内base_footprint→odom→mapの部分を変換
     global app_data
     with app_data.lock:
         # 変換データの存在確認
@@ -65,27 +67,28 @@ def update_robot_pose():
         if not all(key in app_data.transforms for key in required_keys):
             return
         try:
-            # 同時変換行列に変換
+            # 同次変換行列に変換
             trans1, rot1 = app_data.transforms[required_keys[0]]
             T_footprint_odom = make_transformation_matrix(trans1, rot1)
 
             trans2, rot2 = app_data.transforms[required_keys[1]]
             T_odom_map = make_transformation_matrix(trans2, rot2)
             
-            T_footprint_map = T_odom_map @ T_footprint_odom
-            x, y = T_footprint_map[0, 3], T_footprint_map[1, 3]
+            T_footprint_map = T_odom_map @ T_footprint_odom # 行列の乗算で変換を1つに合成
+            x, y = T_footprint_map[0, 3], T_footprint_map[1, 3] # x座標とy座標を抽出
             r = Rotation.from_matrix(T_footprint_map[:3, :3])
-            yaw = r.as_euler('zyx', degrees=False)[0]
-            app_data.robot_pose_on_map = [x, y, yaw] # 最終的な位置と向き
+            yaw = r.as_euler('zyx', degrees=False)[0] # 向き（ヨー角）を抽出
+            app_data.robot_pose_on_map = [x, y, yaw] # 最終的な姿勢
         except Exception as e:
             LOG.error(f"Error from update_robot_pose: {e}", exc_info=True)
 
+# Zenohのセッションと購読を管理するスレッド
 def zenoh_thread(loop: asyncio.AbstractEventLoop):
-    # Zenohのセッションと購読を管理するスレッド
+    # Zenohサブスクライバのコールバック関数
     def on_message(msg: zenoh.Sample):
-        # Zenohサブスクライバのコールバック関数
+        # トピック名の判別用に文字列に変換
         key_expr = str(msg.key_expr)
-        # LOG.info(f"Received message on topic: {key_expr}") # 受信確認用ログ
+        #LOG.info(f"Received message on topic: {key_expr}") # 受信確認用ログ
         try:
             msg_type = ROS_MSG_TYPES.get(key_expr)
             if not msg_type: 
@@ -100,7 +103,7 @@ def zenoh_thread(loop: asyncio.AbstractEventLoop):
                     # OccupancyGridオブジェクトからNumPy配列に変換
                     grid_data = np.array(data.data, dtype=np.int8).reshape((data.info.height, data.info.width))
                     
-                    # 地図の色はROS2に付属する3Dビジュアライザーであるrviz2の仕様を参考にした
+                    # 地図の色はROS2標準のビジュアライザーであるRviz2の仕様を参考にした
                     # 未探索(-1)領域の色である灰色で画像全体を初期化
                     map_img = np.full((data.info.height, data.info.width, 3), 128, dtype=np.uint8)
 
@@ -119,7 +122,6 @@ def zenoh_thread(loop: asyncio.AbstractEventLoop):
                         # 計算したグレースケール値を画像の該当箇所に適用
                         map_img[prob_obstacle] = np.stack([gray_values]*3, axis=-1)
 
-                    #flipped_map_img = cv2.flip(map_img, 1) # 試験的に画像を左右反転
                     # 最終的な地図画像
                     app_data.latest_map_img = map_img
                 
@@ -136,7 +138,7 @@ def zenoh_thread(loop: asyncio.AbstractEventLoop):
                             np.array([tf.transform.translation.x, tf.transform.translation.y, tf.transform.translation.z]),
                             Rotation.from_quat([tf.transform.rotation.x, tf.transform.rotation.y, tf.transform.rotation.z, tf.transform.rotation.w]).as_matrix()
                         )
-                # ロボットの姿勢を計算
+                # ロボットの位置を計算
                 update_robot_pose()
         except Exception as e:
             LOG.error(f"Error from {key_expr}: {e}", exc_info=True)
@@ -145,8 +147,8 @@ def zenoh_thread(loop: asyncio.AbstractEventLoop):
     session = None
     try:
         conf = zenoh.Config()
-        conf.insert_json5("connect/endpoints", json.dumps([ZENOH_ROUTER_ADDRESS]))
-        # zenohルーターとセッションを確立
+        # zenohセッションを開始
+        # zenohのScouting機能で同一ネットワーク内で動作しているzenoh-bridge-ros2ddsを自動検出し,通信開始
         session = zenoh.open(conf)
         LOG.info("Zenoh session opened successfully.")
         # 各トピックに対してon_messageコールバックを登録
@@ -162,6 +164,7 @@ def zenoh_thread(loop: asyncio.AbstractEventLoop):
             session.close()
             LOG.info("Zenoh session closed.")
 
+# FastAPIの初期化及び静的ファイル配信
 app = FastAPI()
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
@@ -171,9 +174,10 @@ async def startup_event():
     app_data = AppData()
     loop = asyncio.get_running_loop()
     # zenoh_threadをバックグラウンドスレッドとして開始
+    # （zenohからの受信処理と画像処理を別スレッドで実行）
     threading.Thread(target=zenoh_thread, args=(loop,), daemon=True).start()
 
-
+# ユーザがトップページにアクセスした際にindex.htmlを返すAPIを定義
 @app.get("/")
 async def read_root():
     return FileResponse('index.html')
@@ -228,6 +232,7 @@ async def broadcast_map():
             if client in connected_clients:
                 connected_clients.remove(client)
 
+# ブラウザと通信を行うためのWebSocket接続に関する定義
 @app.websocket("/ws/visualization")
 async def websocket_endpoint(websocket: WebSocket):
     # 新規クライアントからの接続受け入れ

@@ -1,19 +1,22 @@
+// クライアントにおけるデータ受信処理
+
 let websocket;
-let flag = false; // 地図のメタデータを受信した「後」に地図画像を受信するためのフラグ
+let flag = false; // 地図のメタデータを受信した後に地図画像を受信するためのフラグ
 
 function connect() {
     const ws_url = `http://${self.location.host}/ws/visualization`;
-    // サーバへの接続開始
+    // サーバへのWebSocket接続開始
     websocket = new WebSocket(ws_url);
     
     // main.jsへ接続ステータスを送信
+    // postMessageでメインスレッド（main.js）に報告
     self.postMessage({ type: 'status', message: 'Connecting...' });
     websocket.onopen = () => { // 接続成功
         self.postMessage({ type: 'status', message: 'Connected' });
     };
 
     websocket.onmessage = async (event) => {
-        if (typeof event.data === 'string') {
+        if (typeof event.data === 'string') { // 文字列を受信した場合、地図のメタデータかロボットの姿勢データとして判断
             const data = JSON.parse(event.data); // jsonをjava scriptオブジェクトに変換
             if (data.type === 'map') { // 地図のメタデータだった場合
                 flag = true; // 次は地図画像の受信を待機
@@ -21,7 +24,7 @@ function connect() {
             } else if (data.type === 'pose') { // 姿勢データだった場合
                 self.postMessage({ type: 'pose', pose: data.pose }); // メインスレッドに送信
             }
-        } else if (event.data instanceof Blob && flag) { // 地図画像を受信したとき、地図画像の受信を待機していた場合
+        } else if (event.data instanceof Blob && flag) { // 地図画像（バイナリデータ）を受信した際に、地図画像の受信を待機していた（flag=true）場合
             // 画像バイナリデータを画像データにデコード
             const imageBitmap = await createImageBitmap(event.data);
             flag = false; // 画像の処理を行ったので、次はメタデータの受信を待機
@@ -29,12 +32,12 @@ function connect() {
         }
     };
 
-    websocket.onclose = () => {
+    websocket.onclose = () => { // 接続切断
         self.postMessage({ type: 'status', message: 'Disconnected. Retrying...' });
         setTimeout(connect, 3000);
     };
 
-    websocket.onerror = (error) => {
+    websocket.onerror = (error) => { // 接続エラー
         self.postMessage({ type: 'status', message: 'Connection Error' });
         websocket.close();
     };

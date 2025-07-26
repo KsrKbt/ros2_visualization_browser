@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="view" content="width=device-width, initial-scale=1.0">
     <title>Robot Map Visualization</title>
     <style>
         body { 
@@ -23,9 +23,9 @@
 </head>
 <body>
     <h1>Robot Map Visualization</h1>
-    <p>Status: <span id="status">Connecting...</span></p>
-    <canvas id="mapCanvas"></canvas>
+    <p>Status: <span id="status">Connecting...</span></p> <!--サーバとの接続状態を表示-->
+    <canvas id="mapCanvas"></canvas> <!--地図やロボットを描画する領域-->
     
-    <script src="/static/main.js"></script>
+    <script src="/static/main.js"></script> <!--status更新やCanvasへの描画処理を行うmain.jsの読み込みと実行-->
 </body>
 </html>
