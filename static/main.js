@@ -1,4 +1,4 @@
-//worker.jsで受信したデータのブラウザへの描画処理
+// worker.jsで受信したデータのブラウザへの描画処理
 
 // DOMを介してwebページ上の要素を取得
 const canvas = document.getElementById('mapCanvas'); // 描画先のcanvasを取得

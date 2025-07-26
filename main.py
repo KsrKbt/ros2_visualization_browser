@@ -1,6 +1,7 @@
 # zenohを介したロボットデータ購読
 # 購読データを用いて地図画像生成処理とロボット位置の計算処理を行う
-# FastAPIを用いて、処理結果をWebSocket経由で接続中の全クライアントに配信。また、Webページの提供
+# FastAPIでWebサーバーを構築し、Webページを配信
+# 処理した結果はWebSocketを用いて、接続している全クライアントに送信
 
 import asyncio
 import threading
