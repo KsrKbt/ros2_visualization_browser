@@ -1,8 +1,8 @@
-// クライアントにおけるデータ受信処理
+// クライアントにおけるデータ受信処理（バックグラウンド）
 // 受信したデータはメインスレッド（main.js）に送信する
 
 let websocket;
-let flag = false; // 地図のメタデータを受信した後に地図画像を受信するためのフラグ
+let flag = false; // 地図のメタデータ（解像度やサイズ）を受信した後に、地図画像の受信を待機していることを表すためのフラグ
 
 function connect() {
     const ws_url = `http://${self.location.host}/ws/visualization`;

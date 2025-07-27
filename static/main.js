@@ -1,4 +1,4 @@
-// worker.jsで受信したデータのブラウザへの描画処理
+// worker.jsで受信したデータのブラウザへの描画処理（メインスレッド）
 
 // DOMを介してwebページ上の要素を取得
 const canvas = document.getElementById('mapCanvas'); // 描画先のcanvasを取得
@@ -73,7 +73,7 @@ function draw() {
         localCtx.translate(px, py);
         localCtx.rotate(pose.theta);
 
-        // ロボットを表す矢印の描画
+        // ロボットを表す三角形の描画
         const arrowLength = 12;
         const arrowWidth = 8;
         localCtx.fillStyle = 'rgba(255, 0, 0, 0.9)';
@@ -84,7 +84,7 @@ function draw() {
         localCtx.closePath();
         localCtx.fill();
         
-        localCtx.restore(); // 座標系の初期状態にリセット
+        localCtx.restore(); // 座標系を初期状態にリセット
     }
 }
 

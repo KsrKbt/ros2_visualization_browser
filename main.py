@@ -139,7 +139,7 @@ def zenoh_thread(loop: asyncio.AbstractEventLoop):
                             np.array([tf.transform.translation.x, tf.transform.translation.y, tf.transform.translation.z]),
                             Rotation.from_quat([tf.transform.rotation.x, tf.transform.rotation.y, tf.transform.rotation.z, tf.transform.rotation.w]).as_matrix()
                         )
-                # ロボットの位置を計算
+                # ロボットの姿勢を計算
                 update_robot_pose()
         except Exception as e:
             LOG.error(f"Error from {key_expr}: {e}", exc_info=True)
@@ -149,7 +149,7 @@ def zenoh_thread(loop: asyncio.AbstractEventLoop):
     try:
         conf = zenoh.Config()
         # zenohセッションを開始
-        # zenohのScouting機能で同一ネットワーク内で動作しているzenoh-bridge-ros2ddsを自動検出し,通信開始
+        # zenohのScouting機能で同一ネットワーク内（ロボット）で動作しているzenoh-bridge-ros2ddsを自動検出し,通信開始
         session = zenoh.open(conf)
         LOG.info("Zenoh session opened successfully.")
         # 各トピックに対してon_messageコールバックを登録
@@ -175,7 +175,7 @@ async def startup_event():
     app_data = AppData()
     loop = asyncio.get_running_loop()
     # zenoh_threadをバックグラウンドスレッドとして開始
-    # （zenohからの受信処理と画像処理を別スレッドで実行）
+    # （zenohからの受信処理と画像処理、ロボットの姿勢計算処理を別スレッドで実行）
     threading.Thread(target=zenoh_thread, args=(loop,), daemon=True).start()
 
 # ユーザがトップページにアクセスした際にindex.htmlを返すAPIを定義
@@ -247,7 +247,8 @@ async def websocket_endpoint(websocket: WebSocket):
             if app_data and app_data.robot_pose_on_map: # 計算済みの姿勢があれば
                 with app_data.lock: pose = app_data.robot_pose_on_map
                 # json形式でクライアントに送信
-                if pose: await websocket.send_json({ "type": "pose", "pose": { "x": pose[0], "y": pose[1], "theta": pose[2] } })
+                if pose: 
+                    await websocket.send_json({ "type": "pose", "pose": { "x": pose[0], "y": pose[1], "theta": pose[2] } })
             await asyncio.sleep(0.1) # 過度なデータ送信を抑制
     except WebSocketDisconnect:
         LOG.info("Client disconnected.")
